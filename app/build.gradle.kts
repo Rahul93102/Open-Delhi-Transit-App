@@ -1,18 +1,18 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    id("com.google.protobuf") version "0.9.4"
+    alias(libs.plugins.protobuf)
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.example.transitapp"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.transitapp"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -38,11 +38,19 @@ android {
     buildFeatures {
         compose = true
     }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
+    }
+    
+    // Fix Room schema export warning
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
 }
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.19.4"
+        artifact = libs.protobuf.protoc.get().toString()
     }
     generateProtoTasks {
         all().forEach { task ->
@@ -67,6 +75,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("androidx.compose.material3:material3:1.1.2")
     
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.6")
@@ -78,7 +87,7 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
     
     // Protobuf
-    implementation("com.google.protobuf:protobuf-javalite:3.19.4")
+    implementation(libs.protobuf.javalite)
     
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
@@ -91,16 +100,21 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
     
+    // Room Database
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+    
     // Compose additional dependencies
-    implementation("androidx.compose.runtime:runtime:1.6.0")
-    implementation("androidx.compose.runtime:runtime-livedata:1.6.0")
+    implementation("androidx.compose.runtime:runtime:1.5.4")
+    implementation("androidx.compose.runtime:runtime-livedata:1.5.4")
     
     // Maps
     implementation("com.google.maps.android:maps-compose:2.11.4")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     
     // Animation
-    implementation("androidx.compose.animation:animation:1.6.0")
+    implementation("androidx.compose.animation:animation:1.5.4")
     
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")

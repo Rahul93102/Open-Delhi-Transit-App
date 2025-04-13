@@ -1,31 +1,75 @@
 package com.example.transitapp.ui.viewmodel
 
+import android.app.Application
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.transitapp.data.SearchHistoryRepository
 import com.example.transitapp.data.TransitRepository
 import com.example.transitapp.data.VehicleData
+import com.example.transitapp.data.database.TransitAppDatabase
 import com.example.transitapp.network.TransitApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class TransitViewModel : ViewModel() {
+class TransitViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "TransitViewModel"
-    private val repository = TransitRepository(TransitApiService.create())
     
+    // Transit repository
+    private val transitRepository = TransitRepository(TransitApiService.create())
+    
+    // Search history repository
+    private val searchHistoryDao = TransitAppDatabase.getDatabase(application).searchHistoryDao()
+    private val searchHistoryRepository = SearchHistoryRepository(searchHistoryDao)
+    
+    // UI states
     private val _uiState = MutableStateFlow<TransitUiState>(TransitUiState.Initial)
     val uiState: StateFlow<TransitUiState> = _uiState.asStateFlow()
     
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     
+    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
+    val suggestions: StateFlow<List<String>> = _suggestions.asStateFlow()
+    
     private val _debugInfo = MutableStateFlow("")
     val debugInfo: StateFlow<String> = _debugInfo.asStateFlow()
     
+    // Vehicle list state for displaying all vehicles
+    private val _vehicleListState = MutableStateFlow<VehicleListState>(VehicleListState.Loading)
+    val vehicleListState: StateFlow<VehicleListState> = _vehicleListState.asStateFlow()
+    
+    init {
+        // Load all vehicles on initialization
+        loadAllVehicles()
+        // Load search suggestions
+        loadSuggestions()
+    }
+    
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+    
+    private fun loadSuggestions() {
+        // Set initial default suggestions
+        viewModelScope.launch {
+            try {
+                val defaultSuggestions = searchHistoryRepository.getDefaultSuggestions()
+                _suggestions.value = defaultSuggestions
+                
+                // Then collect from the flow
+                searchHistoryDao.getTopSearches(3).collect { entities ->
+                    if (entities.isNotEmpty()) {
+                        _suggestions.value = entities.map { it.query }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading suggestions", e)
+                _suggestions.value = listOf("DL1PD1034", "DL1PC6453", "DL1PB2277")
+            }
+        }
     }
     
     fun searchVehicle() {
@@ -38,12 +82,17 @@ class TransitViewModel : ViewModel() {
         _uiState.value = TransitUiState.Loading
         _debugInfo.value = "Searching for vehicle ID: $query"
         
+        // Record search in history
+        viewModelScope.launch {
+            searchHistoryRepository.addSearch(query)
+        }
+        
         viewModelScope.launch {
             try {
                 Log.d(TAG, "Starting search for vehicle ID: $query")
                 _debugInfo.value += "\nStarting API request..."
                 
-                val result = repository.getVehicleData(query)
+                val result = transitRepository.getVehicleData(query)
                 
                 if (result != null) {
                     Log.d(TAG, "Vehicle found: ${result.id}")
@@ -71,6 +120,61 @@ class TransitViewModel : ViewModel() {
             }
         }
     }
+    
+    fun selectSuggestion(suggestion: String) {
+        _searchQuery.value = suggestion
+        searchVehicle()
+    }
+    
+    fun loadAllVehicles(limit: Int = 100) {
+        _vehicleListState.value = VehicleListState.Loading
+        
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Loading all vehicles (limit: $limit)")
+                
+                // Create sample vehicle list for now
+                val vehicles = createSampleVehicleList(limit)
+                
+                if (vehicles.isNotEmpty()) {
+                    Log.d(TAG, "Loaded ${vehicles.size} vehicles")
+                    _vehicleListState.value = VehicleListState.Success(vehicles)
+                } else {
+                    Log.e(TAG, "No vehicles found")
+                    _vehicleListState.value = VehicleListState.Error("No vehicles found")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading vehicles", e)
+                _vehicleListState.value = VehicleListState.Error("Error: ${e.message}")
+            }
+        }
+    }
+    
+    fun refreshVehicleList() {
+        loadAllVehicles()
+    }
+    
+    fun selectVehicle(vehicleData: VehicleData) {
+        _uiState.value = TransitUiState.Success(vehicleData)
+    }
+    
+    // Create sample vehicle data for testing
+    private fun createSampleVehicleList(count: Int): List<VehicleData> {
+        return List(count) { index ->
+            val id = "DL${1000 + index}"
+            VehicleData(
+                id = id,
+                routeId = "Route_${index % 20 + 1}",
+                tripId = "Trip_${System.currentTimeMillis() + index}",
+                startTime = "0${6 + (index % 12)}:${index % 60}:00",
+                startDate = "20250413",
+                latitude = 28.6139f + (index % 10) * 0.01f,  // Varied Delhi coordinates
+                longitude = 77.2090f + (index % 15) * 0.01f,
+                speed = 15f + (index % 40),
+                timestamp = System.currentTimeMillis() / 1000
+            )
+        }
+    }
 }
 
 sealed class TransitUiState {
@@ -78,4 +182,10 @@ sealed class TransitUiState {
     object Loading : TransitUiState()
     data class Success(val vehicleData: VehicleData) : TransitUiState()
     data class Error(val message: String) : TransitUiState()
+}
+
+sealed class VehicleListState {
+    object Loading : VehicleListState()
+    data class Success(val vehicles: List<VehicleData>) : VehicleListState()
+    data class Error(val message: String) : VehicleListState()
 } 

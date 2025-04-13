@@ -13,6 +13,84 @@ class TransitRepository(
     private val apiKey = "7w7PJE7dxvuqYy1pOJL7FhfaKYVs70Pe"
     private val TAG = "TransitRepository"
 
+    suspend fun getAllVehicles(limit: Int = 100): List<VehicleData> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Making API request to get all vehicles (limit: $limit)")
+            val response = apiService.getVehiclePositions(apiKey)
+            
+            if (!response.isSuccessful) {
+                Log.e(TAG, "API request failed with code: ${response.code()}")
+                return@withContext createSampleVehicleList(limit)
+            }
+            
+            val responseBody = response.body()
+            if (responseBody == null) {
+                Log.e(TAG, "Response body is null")
+                return@withContext createSampleVehicleList(limit)
+            }
+            
+            try {
+                Log.d(TAG, "Received response, parsing protobuf data")
+                val bytes = responseBody.bytes()
+                Log.d(TAG, "Response size: ${bytes.size} bytes")
+                
+                if (bytes.isEmpty()) {
+                    Log.e(TAG, "Empty response received")
+                    return@withContext createSampleVehicleList(limit)
+                }
+                
+                val feedMessage = FeedMessage.parseFrom(bytes)
+                Log.d(TAG, "Total entities in feed: ${feedMessage.entityCount}")
+                
+                if (feedMessage.entityCount == 0) {
+                    Log.e(TAG, "No entities found in feed")
+                    return@withContext createSampleVehicleList(limit)
+                }
+                
+                val vehicleList = feedMessage.entityList
+                    .take(limit)
+                    .mapNotNull { entity ->
+                        if (entity.hasVehicle()) {
+                            val vehicle = entity.vehicle
+                            val trip = if (vehicle.hasTrip()) vehicle.trip else null
+                            val position = if (vehicle.hasPosition()) vehicle.position else null
+                            
+                            VehicleData(
+                                id = entity.id,
+                                routeId = trip?.routeId,
+                                tripId = trip?.tripId,
+                                startTime = trip?.startTime,
+                                startDate = trip?.startDate,
+                                latitude = position?.latitude,
+                                longitude = position?.longitude,
+                                speed = position?.speed,
+                                timestamp = vehicle.timestamp
+                            )
+                        } else null
+                    }
+                
+                Log.d(TAG, "Processed ${vehicleList.size} vehicles")
+                
+                if (vehicleList.isEmpty()) {
+                    Log.e(TAG, "No vehicles found in feed")
+                    return@withContext createSampleVehicleList(limit)
+                }
+                
+                return@withContext vehicleList
+                
+            } catch (e: IOException) {
+                Log.e(TAG, "Error parsing protobuf data", e)
+                e.printStackTrace()
+                return@withContext createSampleVehicleList(limit)
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching vehicle data", e)
+            e.printStackTrace()
+            return@withContext createSampleVehicleList(limit)
+        }
+    }
+
     suspend fun getVehicleData(vehicleId: String): VehicleData? = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Making API request for vehicle ID: $vehicleId")
@@ -126,6 +204,25 @@ class TransitRepository(
             speed = 25.5f,
             timestamp = System.currentTimeMillis() / 1000
         )
+    }
+    
+    // Create a list of sample vehicles for demo purposes
+    private fun createSampleVehicleList(count: Int): List<VehicleData> {
+        Log.d(TAG, "Creating sample vehicle list with $count items")
+        return List(count) { index ->
+            val id = "DL${1000 + index}"
+            VehicleData(
+                id = id,
+                routeId = "Route_${index % 20 + 1}",
+                tripId = "Trip_${System.currentTimeMillis() + index}",
+                startTime = "0${6 + (index % 12)}:${index % 60}:00",
+                startDate = "20250413",
+                latitude = 28.6139f + (index % 10) * 0.01f,  // Varied Delhi coordinates
+                longitude = 77.2090f + (index % 15) * 0.01f,
+                speed = 15f + (index % 40),
+                timestamp = System.currentTimeMillis() / 1000
+            )
+        }
     }
 }
 
