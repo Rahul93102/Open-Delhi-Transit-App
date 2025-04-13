@@ -1,0 +1,45 @@
+syntax = "proto2";
+option java_package = "com.example.transitapp.proto";
+option java_outer_classname = "GtfsRealtime";
+
+message FeedMessage {
+  required FeedHeader header = 1;
+  repeated FeedEntity entity = 2;
+}
+
+message FeedHeader {
+  required string gtfs_realtime_version = 1;
+  enum Incrementality {
+    FULL_DATASET = 0;
+    DIFFERENTIAL = 1;
+  }
+  optional Incrementality incrementality = 2 [default = FULL_DATASET];
+  optional uint64 timestamp = 3;
+}
+
+message FeedEntity {
+  required string id = 1;
+  optional bool is_deleted = 2 [default = false];
+  optional VehiclePosition vehicle = 3;
+}
+
+message VehiclePosition {
+  optional TripDescriptor trip = 1;
+  optional Position position = 2;
+  optional uint64 timestamp = 8;
+}
+
+message TripDescriptor {
+  optional string trip_id = 1;
+  optional string route_id = 2;
+  optional string start_time = 3;
+  optional string start_date = 4;
+}
+
+message Position {
+  required float latitude = 1;
+  required float longitude = 2;
+  optional float bearing = 3;
+  optional float odometer = 4;
+  optional float speed = 5;
+} 
