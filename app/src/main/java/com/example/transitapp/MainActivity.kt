@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.example.transitapp.ui.screens.MainScreen
+import com.example.transitapp.ui.navigation.TransitNavigation
 import com.example.transitapp.ui.theme.TransitAppTheme
 import com.example.transitapp.ui.viewmodel.TransitViewModel
 
@@ -32,7 +32,8 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen(transitViewModel = viewModel)
+                    // Use TransitNavigation instead of MainScreen directly
+                    TransitNavigation()
                 }
             }
         }

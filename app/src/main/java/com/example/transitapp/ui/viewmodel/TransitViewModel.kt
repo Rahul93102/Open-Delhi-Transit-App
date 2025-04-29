@@ -38,7 +38,7 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
     val debugInfo: StateFlow<String> = _debugInfo.asStateFlow()
     
     // Vehicle list state for displaying all vehicles
-    private val _vehicleListState = MutableStateFlow<VehicleListState>(VehicleListState.Loading)
+    private val _vehicleListState = MutableStateFlow<VehicleListState>(VehicleListState.Initial)
     val vehicleListState: StateFlow<VehicleListState> = _vehicleListState.asStateFlow()
     
     init {
@@ -126,22 +126,47 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
         searchVehicle()
     }
     
+    fun searchNearbyBuses() {
+        val query = _searchQuery.value
+        if (query.isBlank()) {
+            _vehicleListState.value = VehicleListState.Error("Please enter a location to search")
+            return
+        }
+
+        _vehicleListState.value = VehicleListState.Loading
+
+        viewModelScope.launch {
+            try {
+                val result = transitRepository.searchNearbyBuses(query)
+                result.fold(
+                    onSuccess = { vehicles ->
+                        if (vehicles.isEmpty()) {
+                            _vehicleListState.value = VehicleListState.Empty("No buses found near $query")
+                        } else {
+                            _vehicleListState.value = VehicleListState.Success(vehicles)
+                        }
+                    },
+                    onFailure = { error ->
+                        _vehicleListState.value = VehicleListState.Error("Error: ${error.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error searching for nearby buses", e)
+                _vehicleListState.value = VehicleListState.Error("Error: ${e.message}")
+            }
+        }
+    }
+    
     fun loadAllVehicles(limit: Int = 100) {
         _vehicleListState.value = VehicleListState.Loading
         
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Loading all vehicles (limit: $limit)")
-                
-                // Create sample vehicle list for now
-                val vehicles = createSampleVehicleList(limit)
-                
+                val vehicles = transitRepository.getAllVehicles(limit)
                 if (vehicles.isNotEmpty()) {
-                    Log.d(TAG, "Loaded ${vehicles.size} vehicles")
                     _vehicleListState.value = VehicleListState.Success(vehicles)
                 } else {
-                    Log.e(TAG, "No vehicles found")
-                    _vehicleListState.value = VehicleListState.Error("No vehicles found")
+                    _vehicleListState.value = VehicleListState.Empty("No vehicles found")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading vehicles", e)
@@ -185,7 +210,9 @@ sealed class TransitUiState {
 }
 
 sealed class VehicleListState {
+    object Initial : VehicleListState()
     object Loading : VehicleListState()
     data class Success(val vehicles: List<VehicleData>) : VehicleListState()
+    data class Empty(val message: String) : VehicleListState()
     data class Error(val message: String) : VehicleListState()
 } 

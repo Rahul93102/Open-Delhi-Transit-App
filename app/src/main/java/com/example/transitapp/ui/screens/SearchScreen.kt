@@ -6,40 +6,24 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.transitapp.ui.components.DebugInfo
-import com.example.transitapp.ui.components.ErrorMessage
-import com.example.transitapp.ui.components.LoadingIndicator
-import com.example.transitapp.ui.components.SearchBar
-import com.example.transitapp.ui.components.VehicleDetails
+import com.example.transitapp.ui.components.*
 import com.example.transitapp.ui.viewmodel.TransitUiState
 import com.example.transitapp.ui.viewmodel.TransitViewModel
+import com.example.transitapp.ui.viewmodel.VehicleListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,100 +36,108 @@ fun SearchScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val debugInfo by viewModel.debugInfo.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
+    val vehicleListState by viewModel.vehicleListState.collectAsState()
     val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        "Search Buses",
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                },
+                title = { Text("Search Nearby Buses") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
+                            contentDescription = "Back"
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
                 )
             )
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
         ) {
-            Column(
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.updateSearchQuery(it) },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Search bar always visible at the top
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = viewModel::updateSearchQuery,
-                    onSearch = viewModel::searchVehicle,
-                    suggestions = suggestions,
-                    onSuggestionClick = viewModel::selectSuggestion
-                )
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                placeholder = { Text("Enter location (e.g., Dwarka Sector 5)") },
+                trailingIcon = {
+                    IconButton(onClick = { viewModel.searchNearbyBuses() }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search"
+                        )
+                    }
+                },
+                singleLine = true
+            )
 
-                // Content based on UI state
-                AnimatedContent(
-                    targetState = uiState,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(300)) togetherWith
-                                fadeOut(animationSpec = tween(300))
-                    },
-                    label = "state_transition"
-                ) { state ->
-                    when (state) {
-                        is TransitUiState.Initial -> {
-                            // Initial state guidance
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(32.dp)
-                            ) {
-                                Text(
-                                    "Enter a bus ID to track its real-time location",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    "Example: DL1PD1034",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        is TransitUiState.Loading -> {
-                            LoadingIndicator()
-                        }
-                        is TransitUiState.Success -> {
-                            VehicleDetails(vehicleData = state.vehicleData)
-                        }
-                        is TransitUiState.Error -> {
-                            Column {
-                                ErrorMessage(message = state.message)
-                                
-                                if (debugInfo.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    DebugInfo(rawResponse = debugInfo)
-                                }
-                            }
-                        }
+            when (val state = vehicleListState) {
+                is VehicleListState.Initial -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Enter a location to find nearby buses",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+                is VehicleListState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                is VehicleListState.Success -> {
+                    Text(
+                        text = "Found ${state.vehicles.size} buses near \"$searchQuery\"",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    VehicleListScreen(
+                        state = state,
+                        onRefresh = { viewModel.searchNearbyBuses() },
+                        onVehicleSelected = viewModel::selectVehicle,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                is VehicleListState.Empty -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+                is VehicleListState.Error -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }

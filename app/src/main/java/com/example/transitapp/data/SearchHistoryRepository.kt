@@ -17,11 +17,9 @@ class SearchHistoryRepository(private val searchHistoryDao: SearchHistoryDao) {
     )
     
     suspend fun addSearch(query: String) {
-        // Check if search exists
         val existingSearch = searchHistoryDao.getSearchByQuery(query)
         
         if (existingSearch != null) {
-            // Update count
             searchHistoryDao.incrementSearchCount(query)
         } else {
             // Insert new search

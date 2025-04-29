@@ -9,6 +9,5 @@ class TransitApplication : Application() {
     
     override fun onCreate() {
         super.onCreate()
-        // Initialize any required components here
     }
 } 

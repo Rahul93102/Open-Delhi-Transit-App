@@ -62,6 +62,12 @@ fun VehicleListScreen(
         contentAlignment = Alignment.Center
     ) {
         when (state) {
+            is VehicleListState.Initial -> {
+                Text(
+                    text = "Enter a location to find nearby buses",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
             is VehicleListState.Loading -> {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -72,6 +78,29 @@ fun VehicleListScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Loading buses...")
+                }
+            }
+            is VehicleListState.Success -> {
+                VehicleList(
+                    vehicles = state.vehicles,
+                    onVehicleClick = onVehicleSelected,
+                    onRefresh = onRefresh
+                )
+            }
+            is VehicleListState.Empty -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(onClick = onRefresh) {
+                        Text("Try Again")
+                    }
                 }
             }
             is VehicleListState.Error -> {
@@ -95,13 +124,6 @@ fun VehicleListScreen(
                         Text("Try Again")
                     }
                 }
-            }
-            is VehicleListState.Success -> {
-                VehicleList(
-                    vehicles = state.vehicles,
-                    onVehicleClick = onVehicleSelected,
-                    onRefresh = onRefresh
-                )
             }
         }
     }

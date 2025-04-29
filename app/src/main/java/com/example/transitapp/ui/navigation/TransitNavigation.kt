@@ -8,13 +8,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.transitapp.ui.screens.BusListScreen
+import com.example.transitapp.ui.screens.FuelStationsScreen
 import com.example.transitapp.ui.screens.SearchScreen
+import com.example.transitapp.ui.viewmodel.FuelStationViewModel
 import com.example.transitapp.ui.viewmodel.TransitViewModel
 import androidx.compose.ui.platform.LocalContext
 
 sealed class Screen(val route: String) {
     object BusList : Screen("busList")
     object Search : Screen("search")
+    object FuelStations : Screen("fuelStations")
 }
 
 @Composable
@@ -23,7 +26,9 @@ fun TransitNavigation(
     navController: NavHostController = rememberNavController(),
 ) {
     val context = LocalContext.current
-    val viewModel = remember { TransitViewModel(context.applicationContext as android.app.Application) }
+    val application = context.applicationContext as android.app.Application
+    val transitViewModel = remember { TransitViewModel(application) }
+    val fuelStationViewModel = remember { FuelStationViewModel(application) }
     
     NavHost(
         navController = navController,
@@ -32,16 +37,28 @@ fun TransitNavigation(
     ) {
         composable(Screen.BusList.route) {
             BusListScreen(
-                viewModel = viewModel,
+                viewModel = transitViewModel,
                 onNavigateToSearch = { 
                     navController.navigate(Screen.Search.route)
+                },
+                onNavigateToFuelStations = {
+                    navController.navigate(Screen.FuelStations.route)
                 }
             )
         }
         
         composable(Screen.Search.route) {
             SearchScreen(
-                viewModel = viewModel,
+                viewModel = transitViewModel,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(Screen.FuelStations.route) {
+            FuelStationsScreen(
+                viewModel = fuelStationViewModel,
                 onBackClick = {
                     navController.popBackStack()
                 }

@@ -6,12 +6,25 @@ import com.example.transitapp.proto.GtfsRealtime.FeedMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import com.example.transitapp.network.GeocodingService
+import com.google.android.gms.maps.model.LatLng
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import kotlin.math.acos
+import kotlin.math.cos
+import kotlin.math.sin
 
 class TransitRepository(
     private val apiService: TransitApiService
 ) {
     private val apiKey = "7w7PJE7dxvuqYy1pOJL7FhfaKYVs70Pe"
     private val TAG = "TransitRepository"
+
+    private val geocodingService = Retrofit.Builder()
+        .baseUrl("https://maps.gomaps.pro/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(GeocodingService::class.java)
 
     suspend fun getAllVehicles(limit: Int = 100): List<VehicleData> = withContext(Dispatchers.IO) {
         try {
@@ -223,6 +236,56 @@ class TransitRepository(
                 timestamp = System.currentTimeMillis() / 1000
             )
         }
+    }
+
+    suspend fun searchNearbyBuses(address: String, maxResults: Int = 100): Result<List<VehicleData>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                // First, get coordinates for the address
+                val geocodeResponse = geocodingService.getGeocode(address)
+                if (!geocodeResponse.isSuccessful || geocodeResponse.body()?.status != "OK") {
+                    return@withContext Result.failure(Exception("Failed to geocode address"))
+                }
+
+                val location = geocodeResponse.body()?.results?.firstOrNull()?.geometry?.location
+                    ?: return@withContext Result.failure(Exception("No location found for address"))
+
+                // Get all vehicles (using sample data for now)
+                val allVehicles = createSampleVehicleList(200) // Get more vehicles to filter from
+
+                // Calculate distances and sort by proximity
+                val nearbyVehicles = allVehicles
+                    .map { vehicle ->
+                        val distance = calculateDistance(
+                            LatLng(location.lat, location.lng),
+                            LatLng(vehicle.latitude!!.toDouble(), vehicle.longitude!!.toDouble())
+                        )
+                        vehicle to distance
+                    }
+                    .sortedBy { it.second }
+                    .take(maxResults)
+                    .map { it.first }
+
+                Result.success(nearbyVehicles)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error searching nearby buses", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    private fun calculateDistance(point1: LatLng, point2: LatLng): Double {
+        val earthRadius = 6371.0 // Earth's radius in kilometers
+
+        val lat1 = Math.toRadians(point1.latitude)
+        val lon1 = Math.toRadians(point1.longitude)
+        val lat2 = Math.toRadians(point2.latitude)
+        val lon2 = Math.toRadians(point2.longitude)
+
+        return earthRadius * acos(
+            sin(lat1) * sin(lat2) +
+            cos(lat1) * cos(lat2) * cos(lon2 - lon1)
+        )
     }
 }
 
